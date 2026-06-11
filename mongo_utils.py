@@ -6,7 +6,7 @@ import certifi
 load_dotenv()
 
 # Read MongoDB URI from .env
-MONGO_URI = os.getenv("MONGO_URI")
+MONGO_URI = st.secrets["MONGO_URI"]
 
 try:
     client = MongoClient(
