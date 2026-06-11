@@ -1,3 +1,7 @@
 streamlit
-google-generativeai
+pymongo
+google-genai
 python-dotenv
+certifi
+plotly
+pandas
