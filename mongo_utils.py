@@ -2,7 +2,7 @@ from pymongo import MongoClient
 from dotenv import load_dotenv
 import os
 import certifi
-
+import streamlit as st
 load_dotenv()
 
 # Read MongoDB URI from .env
