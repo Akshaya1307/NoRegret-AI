@@ -1,0 +1,113 @@
+{
+  "opportunities": [
+    {
+      "id": 1,
+      "title": "Google Software Engineering Internship",
+      "type": "internship",
+      "min_cgpa": 8.0,
+      "eligible_degrees": ["B.Tech", "B.E."],
+      "required_skills": ["Python", "Data Structures", "Algorithms"],
+      "deadline": "2026-12-31",
+      "description": "Software engineering internship opportunity."
+    },
+
+    {
+      "id": 2,
+      "title": "TCS CodeVita",
+      "type": "competition",
+      "min_cgpa": 0,
+      "eligible_degrees": ["Any"],
+      "required_skills": ["Python", "Problem Solving"],
+      "deadline": "2026-12-31",
+      "description": "Global programming competition."
+    },
+
+    {
+      "id": 3,
+      "title": "Infosys Springboard Internship",
+      "type": "internship",
+      "min_cgpa": 7.0,
+      "eligible_degrees": ["B.Tech", "B.E.", "MCA"],
+      "required_skills": ["Python", "SQL"],
+      "deadline": "2026-12-31",
+      "description": "Industry internship through Infosys Springboard."
+    },
+
+    {
+      "id": 4,
+      "title": "IBM SkillsBuild Internship",
+      "type": "internship",
+      "min_cgpa": 6.5,
+      "eligible_degrees": ["Any"],
+      "required_skills": ["Python", "Machine Learning"],
+      "deadline": "2026-12-31",
+      "description": "AI and Data Science internship."
+    },
+
+    {
+      "id": 5,
+      "title": "AWS AI & ML Scholarship",
+      "type": "scholarship",
+      "min_cgpa": 7.0,
+      "eligible_degrees": ["Any"],
+      "required_skills": ["Python", "Machine Learning"],
+      "deadline": "2026-12-31",
+      "description": "Scholarship for AI and ML learners."
+    },
+
+    {
+      "id": 6,
+      "title": "Microsoft Learn Student Ambassador",
+      "type": "program",
+      "min_cgpa": 6.0,
+      "eligible_degrees": ["Any"],
+      "required_skills": ["Communication", "Leadership"],
+      "deadline": "2026-12-31",
+      "description": "Student community leadership program."
+    },
+
+    {
+      "id": 7,
+      "title": "Google Cloud Rapid Agent Hackathon",
+      "type": "hackathon",
+      "min_cgpa": 0,
+      "eligible_degrees": ["Any"],
+      "required_skills": ["Python", "AI", "Streamlit"],
+      "deadline": "2026-12-31",
+      "description": "Build AI agents using Gemini."
+    },
+
+    {
+      "id": 8,
+      "title": "Cisco Campus Hiring",
+      "type": "job",
+      "min_cgpa": 8.3,
+      "eligible_degrees": ["B.Tech", "B.E."],
+      "required_skills": ["Computer Networks", "Python"],
+      "deadline": "2026-12-31",
+      "description": "Campus hiring opportunity."
+    },
+
+    {
+      "id": 9,
+      "title": "Data Analyst Internship",
+      "type": "internship",
+      "min_cgpa": 7.0,
+      "eligible_degrees": ["Any"],
+      "required_skills": ["Python", "SQL", "Power BI"],
+      "deadline": "2026-12-31",
+      "description": "Data analytics internship."
+    },
+
+    {
+      "id": 10,
+      "title": "Machine Learning Engineer Internship",
+      "type": "internship",
+      "min_cgpa": 8.0,
+      "eligible_degrees": ["B.Tech", "B.E."],
+      "required_skills": ["Python", "Machine Learning", "Deep Learning"],
+      "deadline": "2026-12-31",
+      "description": "ML engineering internship."
+    }
+  ]
+}
