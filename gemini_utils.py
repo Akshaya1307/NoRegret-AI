@@ -6,9 +6,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Initialize Gemini Client
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-
-
+client = genai.Client(
+    api_key=st.secrets["GEMINI_API_KEY"]
+)
 def check_eligibility_with_ai(profile, opportunity):
     prompt = f"""
 You are NoRegret AI, an intelligent career opportunity advisor.
