@@ -127,87 +127,88 @@ def parse_ai_response(response_text):
             continue
 
         # SCORE
-        if 'ELIGIBILITY' in line.upper() and 'SCORE' in line.upper():
-            try:
-                score_text = line.split(':')[-1].strip()
-                score_text = score_text.replace('/100', '').strip()
-                match = re.search(r'\d+', score_text)
-                if match:
-                    result['score'] = match.group()
-            except:
-                result['score'] = '0'
+        if line.startswith("ELIGIBILITY_SCORE:"):
+            match = re.search(r'\d+', line)
+            if match:
+                result['score'] = match.group()
 
         # ELIGIBLE
-        elif line.startswith('ELIGIBLE:'):
-            eligible_text = line.replace('ELIGIBLE:', '').strip()
-            result['eligible'] = 'Yes' if eligible_text.lower() == 'yes' else 'No'
+        elif line.startswith("ELIGIBLE:"):
+            result['eligible'] = (
+                "Yes"
+                if "yes" in line.lower()
+                else "No"
+            )
 
         # REASON
-        elif line.startswith('REASON:'):
-            current_section = 'reason'
-            result['reason'] = ''
+        elif line.startswith("REASON:"):
+            current_section = "reason"
+            result['reason'] = ""
 
         # STRENGTHS
-        elif line.startswith('STRENGTHS:'):
-            strengths = line.replace('STRENGTHS:', '').strip()
-            if strengths and strengths.lower() != 'none':
-                result['strengths'] = strengths
-            current_section = 'strengths'
+        elif line.startswith("STRENGTHS:"):
+            current_section = "strengths"
+            result['strengths'] = ""
 
-        # MISSING SKILLS - Enhanced parsing
-        elif line.startswith('MISSING_SKILLS:'):
-            current_section = 'missing_skills'
-            skills_text = line.replace('MISSING_SKILLS:', '').strip()
-            
-            # Parse skills - handle various formats
-            if skills_text and skills_text.lower() != 'none':
-                # Split by comma, or if no commas, split by spaces
-                if ',' in skills_text:
-                    skills_list = [s.strip() for s in skills_text.split(',') if s.strip()]
-                else:
-                    skills_list = [s.strip() for s in skills_text.split() if s.strip()]
-                
-                result['missing_skills'] = skills_list
-                print(f"📋 Parsed missing skills: {skills_list}")  # Debug print
-            else:
-                result['missing_skills'] = []
+        # MISSING SKILLS
+        elif line.startswith("MISSING_SKILLS:"):
+            current_section = "missing_skills"
+
+            skills_text = (
+                line.replace("MISSING_SKILLS:", "")
+                .strip()
+            )
+
+            if skills_text and skills_text.lower() != "none":
+                result['missing_skills'] = [
+                    s.strip()
+                    for s in skills_text.split(',')
+                    if s.strip()
+                ]
 
         # RECOMMENDATION
-        elif line.startswith('RECOMMENDATION:'):
-            current_section = 'recommendation'
-            result['recommendation'] = ''
+        elif line.startswith("RECOMMENDATION:"):
+            current_section = "recommendation"
+            result['recommendation'] = ""
 
         # NEXT STEPS
-        elif line.startswith('NEXT_STEPS:'):
-            current_section = 'next_steps'
-            result['next_steps'] = ''
+        elif line.startswith("NEXT_STEPS:"):
+            current_section = "next_steps"
+            result['next_steps'] = ""
 
         else:
-            if current_section == 'reason':
+
+            if current_section == "reason":
                 result['reason'] += line + " "
-            elif current_section == 'strengths':
-                if result['strengths']:
-                    result['strengths'] += " " + line
-                else:
-                    result['strengths'] = line
-            elif current_section == 'recommendation':
+
+            elif current_section == "strengths":
+                result['strengths'] += line + " "
+
+            elif current_section == "missing_skills":
+
+                if line.lower() != "none":
+                    extra_skills = [
+                        s.strip()
+                        for s in line.split(',')
+                        if s.strip()
+                    ]
+
+                    result['missing_skills'].extend(extra_skills)
+
+            elif current_section == "recommendation":
                 result['recommendation'] += line + " "
-            elif current_section == 'next_steps':
+
+            elif current_section == "next_steps":
                 result['next_steps'] += line + " "
 
-    # Clean up whitespace
     result['reason'] = result['reason'].strip()
     result['strengths'] = result['strengths'].strip()
     result['recommendation'] = result['recommendation'].strip()
     result['next_steps'] = result['next_steps'].strip()
-    
-    # Ensure missing_skills is always a list
-    if not isinstance(result['missing_skills'], list):
-        result['missing_skills'] = []
-    
-    # Debug print
-    print(f"🔍 Final parsed result - Missing skills: {result['missing_skills']}")
-    print(f"🔍 Eligible: {result['eligible']}, Score: {result['score']}")
+
+    result['missing_skills'] = list(
+        set(result['missing_skills'])
+    )
 
     return result
 
