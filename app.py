@@ -22,16 +22,29 @@ st.set_page_config(
 # ============ CACHE OPTIMIZATIONS ============
 @st.cache_data(ttl=1800)
 def load_opportunities():
-    """Cache opportunities to avoid repeated MongoDB calls"""
+    """DEBUG VERSION - Shows exactly what's happening with MongoDB"""
     try:
-        # FIX #2: Prevent app crash if MongoDB fails
         if opportunities_collection is not None:
-            opportunities = list(opportunities_collection.find({}, {"_id": 0}))
-            return opportunities
+            # Try to get all opportunities
+            data = list(opportunities_collection.find({}, {"_id": 0}))
+            
+            # DEBUG: Show success message
+            st.sidebar.success(f"✅ MongoDB Connected")
+            st.sidebar.write(f"📊 Documents Found: {len(data)}")
+            
+            # Show first document sample if available
+            if data:
+                st.sidebar.write(f"📌 Sample: {data[0].get('title', 'No title')}")
+            else:
+                st.sidebar.warning("⚠️ Collection is empty! No documents found.")
+            
+            return data
         else:
+            st.sidebar.error("❌ opportunities_collection is None")
+            st.sidebar.info("Check mongo_utils.py - collection may not be initialized")
             return []
     except Exception as e:
-        st.warning(f"Using fallback data: {e}")
+        st.sidebar.error(f"❌ Mongo Error: {e}")
         return []
 
 @st.cache_data(ttl=1800)
@@ -48,12 +61,6 @@ def get_total_profiles():
 # Load data once
 opportunities = load_opportunities()
 total_profiles_db = get_total_profiles()
-
-# Debug - temporary (remove for final submission)
-if opportunities:
-    st.sidebar.write(f"📊 Opportunities loaded: {len(opportunities)}")
-else:
-    st.sidebar.warning("⚠️ No opportunities loaded from MongoDB")
 
 # ============ SESSION STATE INITIALIZATION ============
 if 'profile' not in st.session_state:
@@ -83,7 +90,6 @@ st.markdown("""
         box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);
     }
     
-    /* Navigation radio styling */
     .stRadio > div {
         gap: 8px;
         background-color: #1E293B;
@@ -190,7 +196,7 @@ def render_home_page():
                 grad_year = st.number_input("Graduation Year", min_value=2024, max_value=2028, step=1, value=2026)
             
             with col2:
-                skills = st.text_area("Skills (comma-separated)", "Python, JavaScript, SQL", height=100)
+                skills_input = st.text_area("Skills (comma-separated)", "Python, JavaScript, SQL", height=100)
                 interests = st.text_area("Interests (comma-separated)", "AI, Web Development, Hackathons", height=100)
             
             submitted = st.form_submit_button("🚀 Save Profile & Get Started", use_container_width=True)
@@ -199,16 +205,19 @@ def render_home_page():
                 if not name:
                     st.error("Please enter your name")
                 else:
+                    skills_list = [s.strip() for s in skills_input.split(",") if s.strip()]
+                    interests_list = [i.strip() for i in interests.split(",") if i.strip()]
+                    
                     profile = {
                         "name": name,
                         "cgpa": cgpa,
                         "degree": degree,
                         "grad_year": grad_year,
-                        "skills": [s.strip() for s in skills.split(",") if s.strip()],
-                        "interests": [i.strip() for i in interests.split(",") if i.strip()],
+                        "skills": skills_list,
+                        "interests": interests_list,
                         "created_at": datetime.now().isoformat()
                     }
-                    st.session_state.profile = profile  # FIX #8: Save to session properly
+                    st.session_state.profile = profile
                     try:
                         if profiles_collection is not None:
                             profiles_collection.insert_one(profile)
@@ -251,6 +260,7 @@ def render_dashboard_page():
     st.markdown("---")
     
     user_skills = [s.lower() for s in st.session_state.profile.get('skills', [])]
+    
     all_required_skills = set()
     for opp in opportunities:
         all_required_skills.update([s.lower() for s in opp.get('required_skills', [])])
@@ -296,7 +306,6 @@ def render_opportunities_page():
     st.markdown("## ⭐ AI-Powered Opportunity Rankings")
     st.markdown("---")
     
-    # FIX #9: Show opportunity count metric
     col_rank1, col_rank2, col_rank3 = st.columns([2, 1, 1])
     with col_rank1:
         st.info("🤖 Let Gemini AI rank the best opportunities for you.")
@@ -308,13 +317,11 @@ def render_opportunities_page():
             with st.spinner("✨ Gemini AI is analyzing..."):
                 try:
                     ranking_text = rank_opportunities(st.session_state.profile, opportunities)
-                    # FIX #7: Show raw output for debugging (remove for final)
                     with st.expander("🔍 Debug: Raw Gemini Output"):
                         st.code(ranking_text)
                     
                     rankings = parse_rankings(ranking_text)
                     
-                    # FIX #6: Check if rankings were parsed successfully
                     if not rankings:
                         st.error("⚠️ Gemini returned no rankings. Please try again.")
                     else:
@@ -347,24 +354,34 @@ def render_opportunities_page():
         
         st.markdown("---")
     
-    # FIX #3: Better skill matching logic
-    user_skills = [s.lower() for s in st.session_state.profile.get("skills", [])]
+    # Skill-based matching
+    user_skills_raw = st.session_state.profile.get("skills", [])
+    user_skills = [s.lower().strip() for s in user_skills_raw if s]
+    
     matched_opps = []
     
     for opp in opportunities:
-        required_skills = [s.lower() for s in opp.get("required_skills", [])]
+        required_skills_raw = opp.get("required_skills", [])
+        required_skills = [s.lower().strip() for s in required_skills_raw if s]
         
-        for skill in user_skills:
-            if any(skill in req or req in skill for req in required_skills):
-                matched_opps.append(opp)
+        # Check for matches
+        matched = False
+        for user_skill in user_skills:
+            for req_skill in required_skills:
+                if user_skill in req_skill or req_skill in user_skill:
+                    matched = True
+                    break
+            if matched:
                 break
+        
+        if matched:
+            matched_opps.append(opp)
     
-    # FIX #4: Show all opportunities if no matches
+    # Show all opportunities if no matches
     if not matched_opps:
-        st.warning("🔍 No exact skill matches found. Showing all available opportunities.")
+        st.warning(f"🔍 No exact skill matches found. Showing all {len(opportunities)} available opportunities.")
         matched_opps = opportunities
     
-    # FIX #9: Show matched count
     st.info(f"🎯 Found {len(matched_opps)} opportunities relevant to your skills")
     
     filter_type = st.selectbox("📂 Filter by Type", ["All", "internship", "hackathon", "scholarship", "program"])
@@ -382,7 +399,6 @@ def render_opportunities_page():
                     st.markdown(f"**CGPA:** {opp.get('min_cgpa', 'N/A')}")
                     st.markdown(f"**Skills:** {', '.join(opp.get('required_skills', []))}")
             
-            # FIX #5: Use unique key to prevent duplicate button errors
             opp_id = opp.get('id', opp.get('_id', str(hash(opp.get('title', '')))))
             unique_key = f"{opp_id}_{opp.get('title', 'unknown')}".replace(" ", "_")
             
