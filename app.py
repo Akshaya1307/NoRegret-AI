@@ -25,11 +25,12 @@ st.set_page_config(
 def load_opportunities():
     """Load opportunities from MongoDB with caching"""
     try:
+        # FIX #2: Prevent app crash if MongoDB fails
         if opportunities_collection is not None:
             # Try to get all opportunities
             data = list(opportunities_collection.find({}, {"_id": 0}))
             
-            # Show debug info in sidebar
+            # FIX #1: Debug MongoDB loading (temporary)
             st.sidebar.success(f"✅ MongoDB Connected")
             st.sidebar.write(f"📊 Documents Found: {len(data)}")
             
@@ -155,6 +156,15 @@ st.markdown("""
     }
     .stButton button:hover { transform: translateY(-2px); }
     .stProgress > div > div { background: linear-gradient(90deg, #8B5CF6, #06B6D4); }
+    
+    /* Debug styling */
+    .debug-box {
+        background-color: #1E293B;
+        border-left: 4px solid #F59E0B;
+        padding: 15px;
+        margin: 10px 0;
+        border-radius: 10px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -218,6 +228,7 @@ def render_home_page():
                         "interests": interests_list,
                         "created_at": datetime.now().isoformat()
                     }
+                    # FIX #8: Save profile to session properly
                     st.session_state.profile = profile
                     try:
                         if profiles_collection is not None:
@@ -359,41 +370,34 @@ def render_opportunities_page():
         
         st.markdown("---")
     
-    # Skill-based matching
+    # FIX #3: Better skill matching logic
     user_skills_raw = st.session_state.profile.get("skills", [])
     user_skills = [s.lower().strip() for s in user_skills_raw if s]
     
     matched_opps = []
     
     for opp in opportunities:
-        required_skills_raw = opp.get("required_skills", [])
-        required_skills = [s.lower().strip() for s in required_skills_raw if s]
+        required_skills = [s.lower().strip() for s in opp.get("required_skills", [])]
         
-        # Check for matches
-        matched = False
-        for user_skill in user_skills:
-            for req_skill in required_skills:
-                if user_skill in req_skill or req_skill in user_skill:
-                    matched = True
-                    break
-            if matched:
+        for skill in user_skills:
+            if any(skill in req or req in skill for req in required_skills):
+                matched_opps.append(opp)
                 break
-        
-        if matched:
-            matched_opps.append(opp)
     
-    # Show all opportunities if no matches
+    # FIX #4: Show all opportunities if no matches
     if not matched_opps:
-        st.warning(f"🔍 No exact skill matches found. Showing all available opportunities.")
+        st.warning("🔍 No exact skill matches found. Showing all available opportunities.")
         matched_opps = opportunities
     
-    st.info(f"🎯 Found {len(matched_opps)} opportunities relevant to your skills")
+    # FIX #9: Better opportunity count
+    st.metric("🎯 Matched Opportunities", len(matched_opps))
+    st.info(f"Based on your skills: {', '.join(user_skills[:3])}{'...' if len(user_skills) > 3 else ''}")
     
     filter_type = st.selectbox("📂 Filter by Type", ["All", "internship", "hackathon", "scholarship", "program"])
     if filter_type != "All":
         matched_opps = [opp for opp in matched_opps if opp.get('type') == filter_type]
     
-    # Use a unique counter for each opportunity to guarantee unique keys
+    # Display opportunities
     for idx, opp in enumerate(matched_opps[:10]):
         with st.expander(f"🎯 {opp.get('title', 'Untitled')}"):
             st.caption(f"📅 Deadline: {opp.get('deadline', 'No deadline')} | Type: {opp.get('type', 'Unknown')}")
@@ -405,27 +409,36 @@ def render_opportunities_page():
                     st.markdown(f"**CGPA:** {opp.get('min_cgpa', 'N/A')}")
                     st.markdown(f"**Skills:** {', '.join(opp.get('required_skills', []))}")
             
-            # Create a truly unique key using multiple identifiers
+            # FIX #5: Fix duplicate button keys
             opp_id = opp.get('id', opp.get('_id', idx))
             title_clean = opp.get('title', 'unknown')[:20].replace(" ", "_").replace("/", "_")
-            # Use index + id + title to guarantee uniqueness
             unique_key = f"analyze_{idx}_{opp_id}_{title_clean}"
             
             if opp_id not in st.session_state.checked_opps:
                 if st.button(f"🔍 Analyze", key=unique_key, use_container_width=True):
                     with st.spinner("🤖 AI analyzing..."):
                         ai_response = check_eligibility_with_ai(st.session_state.profile, opp)
+                        
+                        # ============ DEBUG OUTPUT ============
+                        st.markdown("---")
+                        st.markdown("### 🔍 DEBUG - Raw Gemini Response:")
+                        st.code(ai_response, language="text")
+                        
                         result = parse_ai_response(ai_response)
+                        
+                        st.markdown("### 🔍 DEBUG - Parsed Result:")
+                        st.json(result)
+                        st.markdown("---")
+                        # ============ END DEBUG ============
+                        
                         st.session_state.checked_opps[opp_id] = result
                         st.rerun()
             else:
                 result = st.session_state.checked_opps[opp_id]
                 
-                # FIXED: Robust score parsing - handles "85", "85%", "85.0", "Score: 85", etc.
+                # Robust score parsing
                 try:
-                    # Try to convert to float first, then to int
                     score_value = result.get('score', '0')
-                    # Extract numbers from string if needed (e.g., "85%" -> 85)
                     numbers = re.findall(r'\d+', str(score_value))
                     if numbers:
                         score = int(numbers[0])
@@ -442,19 +455,15 @@ def render_opportunities_page():
                 else:
                     st.error("❌ NOT ELIGIBLE")
                 
-                # Show missing skills directly in the UI
                 if result.get('missing_skills') and len(result['missing_skills']) > 0:
                     st.warning(f"⚠️ **Missing Skills:** {', '.join(result['missing_skills'])}")
                 
-                # Show recommendation if available
                 if result.get('recommendation'):
                     st.info(f"💡 **Recommendation:** {result['recommendation']}")
                 
-                # Show next steps if available
                 if result.get('next_steps'):
                     st.info(f"🚀 **Next Steps:** {result['next_steps']}")
                 
-                # Add clear button with unique key too
                 clear_key = f"clear_{idx}_{opp_id}_{title_clean}"
                 if st.button(f"🗑️ Clear", key=clear_key, use_container_width=True):
                     del st.session_state.checked_opps[opp_id]
@@ -469,33 +478,26 @@ def render_skill_analysis_page():
     st.markdown("---")
     
     if st.session_state.checked_opps:
-        # Debug expander to see raw data
         with st.expander("🔍 Debug: Checked Opportunities Data"):
             for opp_id, result in st.session_state.checked_opps.items():
                 st.write(f"**Opportunity ID:** {opp_id}")
                 st.write(f"  - Eligible: {result.get('eligible')}")
                 st.write(f"  - Score: {result.get('score')}")
                 st.write(f"  - Missing Skills: {result.get('missing_skills', [])}")
-                st.write(f"  - Reason: {result.get('reason', '')[:100]}...")
                 st.write("---")
         
-        # Collect all missing skills from analyzed opportunities
         all_missing = []
-        for opp_id, result in st.session_state.checked_opps.items():
+        for result in st.session_state.checked_opps.values():
             missing = result.get('missing_skills', [])
             if missing and isinstance(missing, list):
                 for skill in missing:
                     if skill and skill.lower() != 'none':
                         all_missing.append(skill.lower().strip())
         
-        # Display results
         if all_missing:
-            st.success(f"✅ Found {len(all_missing)} skill gaps across your analyzed opportunities!")
-            
-            # Count frequency of each missing skill
+            st.success(f"✅ Found {len(all_missing)} skill gaps!")
             skill_counts = Counter(all_missing)
             
-            # Create bar chart
             fig = px.bar(
                 x=list(skill_counts.keys()), 
                 y=list(skill_counts.values()), 
@@ -516,33 +518,11 @@ def render_skill_analysis_page():
             st.markdown("### 📋 Learning Recommendations")
             
             for skill, count in skill_counts.most_common(5):
-                st.markdown(f"""
-                <div style="background-color: #1E293B; padding: 15px; border-radius: 10px; margin: 10px 0; border-left: 4px solid #8B5CF6;">
-                    <h4>📌 {skill.title()}</h4>
-                    <p>Missing in <strong>{count}</strong> opportunity/ies</p>
-                    <p>💡 <strong>Recommendation:</strong> Focus on learning {skill.title()} through online courses and practice projects.</p>
-                </div>
-                """, unsafe_allow_html=True)
+                st.markdown(f"**📌 {skill.title()}** - Missing in {count} opportunities")
         else:
-            st.warning("⚠️ No skill gaps detected in the analyzed opportunities.")
-            st.info("""
-            **This could mean:**
-            1. You haven't analyzed enough opportunities yet (analyze more!)
-            2. Your profile skills perfectly match all requirements (unlikely)
-            3. Gemini isn't returning missing_skills data - check the debug panel above
-            
-            **Try:** Go to Opportunities tab and analyze 2-3 opportunities first.
-            """)
+            st.warning("⚠️ No skill gaps detected. Try analyzing more opportunities!")
     else:
-        st.info("👆 **No opportunities analyzed yet!**")
-        st.markdown("""
-        ### How to see skill gaps:
-        1. Go to the **Opportunities** tab
-        2. Click **"Analyze"** on any opportunity
-        3. Return here to see your skill gaps
-        
-        The AI will identify which skills you're missing for each opportunity.
-        """)
+        st.info("👆 Go to Opportunities tab and analyze some opportunities first!")
 
 # ============ PAGE ROUTING ============
 if selected_page == "🏠 Home":
