@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 import streamlit as st
 load_dotenv()
 
+# Initialize Gemini Client
 client = genai.Client(
     api_key=st.secrets["GEMINI_API_KEY"]
 )
@@ -38,7 +39,6 @@ Follow the format exactly.
 Do not change field names.
 Do not omit any field.
 Always provide a numeric ELIGIBILITY_SCORE.
-Be SPECIFIC about which skills are missing from the Required Skills list.
 
 Respond EXACTLY like this:
 
@@ -53,7 +53,7 @@ STRENGTHS:
 Strength 1, Strength 2
 
 MISSING_SKILLS:
-Skill 1, Skill 2, Skill 3
+Skill 1, Skill 2
 
 RECOMMENDATION:
 Advice here
@@ -66,9 +66,7 @@ Rules:
 2. Be strict with required skills.
 3. Be strict with degree requirements unless "Any" is listed.
 4. Calculate a realistic eligibility score.
-5. If the student is missing ANY required skills, list them explicitly in MISSING_SKILLS.
-6. If no skills are missing, write "None" in MISSING_SKILLS.
-7. Give practical, actionable recommendations.
+5. Give practical recommendations.
 """
 
     try:
@@ -127,78 +125,60 @@ def parse_ai_response(response_text):
             continue
 
         # SCORE
-        if line.startswith("ELIGIBILITY_SCORE:"):
-            match = re.search(r'\d+', line)
-            if match:
-                result['score'] = match.group()
+        if 'ELIGIBILITY' in line.upper() and 'SCORE' in line.upper():
+            try:
+                score_text = line.split(':')[-1].strip()
+                score_text = score_text.replace('/100', '').strip()
+                match = re.search(r'\d+', score_text)
+                if match:
+                    result['score'] = match.group()
+            except:
+                result['score'] = '0'
 
         # ELIGIBLE
-        elif line.startswith("ELIGIBLE:"):
-            result['eligible'] = (
-                "Yes"
-                if "yes" in line.lower()
-                else "No"
-            )
+        elif line.startswith('ELIGIBLE:'):
+            result['eligible'] = line.replace('ELIGIBLE:', '').strip()
 
         # REASON
-        elif line.startswith("REASON:"):
-            current_section = "reason"
-            result['reason'] = ""
+        elif line.startswith('REASON:'):
+            current_section = 'reason'
+            result['reason'] = ''
 
         # STRENGTHS
-        elif line.startswith("STRENGTHS:"):
-            current_section = "strengths"
-            result['strengths'] = ""
+        elif line.startswith('STRENGTHS:'):
+            strengths = line.replace('STRENGTHS:', '').strip()
+            if strengths:
+                result['strengths'] = strengths
+            current_section = 'strengths'
 
         # MISSING SKILLS
-        elif line.startswith("MISSING_SKILLS:"):
-            current_section = "missing_skills"
-
-            skills_text = (
-                line.replace("MISSING_SKILLS:", "")
-                .strip()
-            )
-
-            if skills_text and skills_text.lower() != "none":
-                result['missing_skills'] = [
-                    s.strip()
-                    for s in skills_text.split(',')
-                    if s.strip()
-                ]
+        elif line.startswith('MISSING_SKILLS:'):
+            current_section = 'missing_skills'
+            skills = line.replace('MISSING_SKILLS:', '').strip()
+            if skills and skills.lower() != 'none':
+                result['missing_skills'] = [skill.strip() for skill in skills.split(',')]
 
         # RECOMMENDATION
-        elif line.startswith("RECOMMENDATION:"):
-            current_section = "recommendation"
-            result['recommendation'] = ""
+        elif line.startswith('RECOMMENDATION:'):
+            current_section = 'recommendation'
+            result['recommendation'] = ''
 
         # NEXT STEPS
-        elif line.startswith("NEXT_STEPS:"):
-            current_section = "next_steps"
-            result['next_steps'] = ""
+        elif line.startswith('NEXT_STEPS:'):
+            current_section = 'next_steps'
+            result['next_steps'] = ''
 
         else:
-
-            if current_section == "reason":
+            if current_section == 'reason':
                 result['reason'] += line + " "
-
-            elif current_section == "strengths":
-                result['strengths'] += line + " "
-
-            elif current_section == "missing_skills":
-
-                if line.lower() != "none":
-                    extra_skills = [
-                        s.strip()
-                        for s in line.split(',')
-                        if s.strip()
-                    ]
-
-                    result['missing_skills'].extend(extra_skills)
-
-            elif current_section == "recommendation":
+            elif current_section == 'strengths':
+                if result['strengths']:
+                    result['strengths'] += " " + line
+                else:
+                    result['strengths'] = line
+            elif current_section == 'recommendation':
                 result['recommendation'] += line + " "
-
-            elif current_section == "next_steps":
+            elif current_section == 'next_steps':
                 result['next_steps'] += line + " "
 
     result['reason'] = result['reason'].strip()
@@ -206,13 +186,10 @@ def parse_ai_response(response_text):
     result['recommendation'] = result['recommendation'].strip()
     result['next_steps'] = result['next_steps'].strip()
 
-    result['missing_skills'] = list(
-        set(result['missing_skills'])
-    )
-
     return result
 
 
+# NEW FUNCTION: Rank opportunities using AI
 def rank_opportunities(profile, opportunities):
     """
     Rank opportunities from best match to worst match using Gemini AI
@@ -315,6 +292,7 @@ def parse_rankings(rankings_text):
                 # Extract title (first part, remove the number)
                 title_part = parts[0].strip()
                 # Remove the number and dot (e.g., "1. " or "1.")
+                import re
                 title = re.sub(r'^\d+\.\s*', '', title_part)
                 
                 # Extract score from second part
@@ -353,6 +331,7 @@ def parse_rankings(rankings_text):
     if not rankings:
         print("No rankings parsed, trying fallback method...")
         # Try to extract any numbered lines
+        import re
         for line in lines:
             line = line.strip()
             # Match patterns like "1. Title | Score: 85 | Reason: ..."
@@ -364,5 +343,4 @@ def parse_rankings(rankings_text):
                     'reason': "AI recommended based on your profile"
                 })
     
-    print(f"✅ Parsed {len(rankings)} rankings")
     return rankings
