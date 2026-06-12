@@ -22,13 +22,13 @@ st.set_page_config(
 # ============ CACHE OPTIMIZATIONS ============
 @st.cache_data(ttl=1800)
 def load_opportunities():
-    """DEBUG VERSION - Shows exactly what's happening with MongoDB"""
+    """Load opportunities from MongoDB with caching"""
     try:
         if opportunities_collection is not None:
             # Try to get all opportunities
             data = list(opportunities_collection.find({}, {"_id": 0}))
             
-            # DEBUG: Show success message
+            # Show debug info in sidebar
             st.sidebar.success(f"✅ MongoDB Connected")
             st.sidebar.write(f"📊 Documents Found: {len(data)}")
             
@@ -306,7 +306,13 @@ def render_opportunities_page():
     st.markdown("## ⭐ AI-Powered Opportunity Rankings")
     st.markdown("---")
     
-    # Removed the Total Opportunities metric - now only 2 columns
+    # Show Gemini API status
+    try:
+        gemini_key_status = "✅ Loaded" if st.secrets.get("GEMINI_API_KEY") else "❌ Missing"
+        st.sidebar.write(f"🔑 Gemini API: {gemini_key_status}")
+    except:
+        st.sidebar.error("🔑 Gemini API Key: NOT FOUND in secrets")
+    
     col_rank1, col_rank2 = st.columns([3, 1])
     with col_rank1:
         st.info("🤖 Let Gemini AI rank the best opportunities for you.")
@@ -416,11 +422,19 @@ def render_opportunities_page():
                 score = int(result.get('score', 0)) if str(result.get('score', '0')).isdigit() else 0
                 st.metric("🎯 Score", f"{score}/100")
                 st.progress(score / 100)
-                st.success("✅ ELIGIBLE" if result.get('eligible') == 'Yes' else "❌ NOT ELIGIBLE")
+                
+                if result.get('eligible') == 'Yes':
+                    st.success("✅ ELIGIBLE")
+                else:
+                    st.error("❌ NOT ELIGIBLE")
                 
                 # Show missing skills directly in the UI
-                if result.get('missing_skills'):
+                if result.get('missing_skills') and len(result['missing_skills']) > 0:
                     st.warning(f"⚠️ **Missing Skills:** {', '.join(result['missing_skills'])}")
+                
+                # Show recommendation if available
+                if result.get('recommendation'):
+                    st.info(f"💡 **Recommendation:** {result['recommendation']}")
                 
                 # Add clear button with unique key too
                 clear_key = f"clear_{idx}_{opp_id}_{title_clean}"
