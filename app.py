@@ -306,13 +306,11 @@ def render_opportunities_page():
     st.markdown("## ⭐ AI-Powered Opportunity Rankings")
     st.markdown("---")
     
-    col_rank1, col_rank2, col_rank3 = st.columns([2, 1, 1])
+    # Removed the Total Opportunities metric - now only 2 columns
+    col_rank1, col_rank2 = st.columns([3, 1])
     with col_rank1:
         st.info("🤖 Let Gemini AI rank the best opportunities for you.")
     with col_rank2:
-        if opportunities:
-            st.metric("📊 Total Opportunities", len(opportunities))
-    with col_rank3:
         if st.button("🚀 Generate AI Rankings", use_container_width=True):
             with st.spinner("✨ Gemini AI is analyzing..."):
                 try:
@@ -379,7 +377,7 @@ def render_opportunities_page():
     
     # Show all opportunities if no matches
     if not matched_opps:
-        st.warning(f"🔍 No exact skill matches found. Showing all {len(opportunities)} available opportunities.")
+        st.warning(f"🔍 No exact skill matches found. Showing all available opportunities.")
         matched_opps = opportunities
     
     st.info(f"🎯 Found {len(matched_opps)} opportunities relevant to your skills")
