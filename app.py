@@ -10,6 +10,7 @@ from datetime import datetime
 from collections import Counter
 import plotly.graph_objects as go
 import plotly.express as px
+import re
 
 # Page config - MUST be first Streamlit command
 st.set_page_config(
@@ -419,7 +420,20 @@ def render_opportunities_page():
                         st.rerun()
             else:
                 result = st.session_state.checked_opps[opp_id]
-                score = int(result.get('score', 0)) if str(result.get('score', '0')).isdigit() else 0
+                
+                # FIXED: Robust score parsing - handles "85", "85%", "85.0", "Score: 85", etc.
+                try:
+                    # Try to convert to float first, then to int
+                    score_value = result.get('score', '0')
+                    # Extract numbers from string if needed (e.g., "85%" -> 85)
+                    numbers = re.findall(r'\d+', str(score_value))
+                    if numbers:
+                        score = int(numbers[0])
+                    else:
+                        score = 0
+                except:
+                    score = 0
+                
                 st.metric("🎯 Score", f"{score}/100")
                 st.progress(score / 100)
                 
@@ -435,6 +449,10 @@ def render_opportunities_page():
                 # Show recommendation if available
                 if result.get('recommendation'):
                     st.info(f"💡 **Recommendation:** {result['recommendation']}")
+                
+                # Show next steps if available
+                if result.get('next_steps'):
+                    st.info(f"🚀 **Next Steps:** {result['next_steps']}")
                 
                 # Add clear button with unique key too
                 clear_key = f"clear_{idx}_{opp_id}_{title_clean}"
