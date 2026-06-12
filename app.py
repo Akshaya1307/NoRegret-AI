@@ -388,7 +388,8 @@ def render_opportunities_page():
     if filter_type != "All":
         matched_opps = [opp for opp in matched_opps if opp.get('type') == filter_type]
     
-    for opp in matched_opps[:10]:
+    # Use a unique counter for each opportunity to guarantee unique keys
+    for idx, opp in enumerate(matched_opps[:10]):
         with st.expander(f"🎯 {opp.get('title', 'Untitled')}"):
             st.caption(f"📅 Deadline: {opp.get('deadline', 'No deadline')} | Type: {opp.get('type', 'Unknown')}")
             st.write(opp.get('description', 'No description'))
@@ -399,11 +400,14 @@ def render_opportunities_page():
                     st.markdown(f"**CGPA:** {opp.get('min_cgpa', 'N/A')}")
                     st.markdown(f"**Skills:** {', '.join(opp.get('required_skills', []))}")
             
-            opp_id = opp.get('id', opp.get('_id', str(hash(opp.get('title', '')))))
-            unique_key = f"{opp_id}_{opp.get('title', 'unknown')}".replace(" ", "_")
+            # Create a truly unique key using multiple identifiers
+            opp_id = opp.get('id', opp.get('_id', idx))
+            title_clean = opp.get('title', 'unknown')[:20].replace(" ", "_").replace("/", "_")
+            # Use index + id + title to guarantee uniqueness
+            unique_key = f"analyze_{idx}_{opp_id}_{title_clean}"
             
             if opp_id not in st.session_state.checked_opps:
-                if st.button(f"🔍 Analyze", key=f"check_{unique_key}"):
+                if st.button(f"🔍 Analyze", key=unique_key, use_container_width=True):
                     with st.spinner("🤖 AI analyzing..."):
                         ai_response = check_eligibility_with_ai(st.session_state.profile, opp)
                         result = parse_ai_response(ai_response)
@@ -415,6 +419,12 @@ def render_opportunities_page():
                 st.metric("🎯 Score", f"{score}/100")
                 st.progress(score / 100)
                 st.success("✅ ELIGIBLE" if result.get('eligible') == 'Yes' else "❌ NOT ELIGIBLE")
+                
+                # Add clear button with unique key too
+                clear_key = f"clear_{idx}_{opp_id}_{title_clean}"
+                if st.button(f"🗑️ Clear", key=clear_key, use_container_width=True):
+                    del st.session_state.checked_opps[opp_id]
+                    st.rerun()
 
 def render_skill_analysis_page():
     if not st.session_state.profile:
