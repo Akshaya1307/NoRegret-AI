@@ -20,25 +20,40 @@ st.set_page_config(
 )
 
 # ============ CACHE OPTIMIZATIONS ============
-@st.cache_data(ttl=1800)  # Increased to 30 minutes
+@st.cache_data(ttl=1800)
 def load_opportunities():
     """Cache opportunities to avoid repeated MongoDB calls"""
     try:
-        return list(opportunities_collection.find({}, {"_id": 0}))
+        # FIX #2: Prevent app crash if MongoDB fails
+        if opportunities_collection is not None:
+            opportunities = list(opportunities_collection.find({}, {"_id": 0}))
+            return opportunities
+        else:
+            return []
     except Exception as e:
+        st.warning(f"Using fallback data: {e}")
         return []
 
 @st.cache_data(ttl=1800)
 def get_total_profiles():
     """Cache profile count"""
     try:
-        return profiles_collection.count_documents({})
+        if profiles_collection is not None:
+            return profiles_collection.count_documents({})
+        else:
+            return 0
     except:
         return 0
 
 # Load data once
 opportunities = load_opportunities()
 total_profiles_db = get_total_profiles()
+
+# Debug - temporary (remove for final submission)
+if opportunities:
+    st.sidebar.write(f"📊 Opportunities loaded: {len(opportunities)}")
+else:
+    st.sidebar.warning("⚠️ No opportunities loaded from MongoDB")
 
 # ============ SESSION STATE INITIALIZATION ============
 if 'profile' not in st.session_state:
@@ -143,16 +158,13 @@ with col_hero2:
     st.markdown("<p style='text-align: center; font-size: 18px;'>AI-Powered Career Intelligence Platform</p>", unsafe_allow_html=True)
     st.markdown("---")
 
-# ============ OPTIMIZED NAVIGATION (NO rerun!) ============
-# Use radio instead of buttons - Streamlet handles navigation smoothly
+# ============ OPTIMIZED NAVIGATION ============
 selected_page = st.radio(
     "",
     ["🏠 Home", "📊 Dashboard", "🎯 Opportunities", "📈 Skill Analysis"],
     horizontal=True,
     label_visibility="collapsed"
 )
-
-# No rerun needed - Streamlit handles it automatically!
 
 # ============ PAGE RENDERING FUNCTIONS ============
 
@@ -168,7 +180,6 @@ def render_home_page():
         
         st.markdown("### 📝 Create Your Profile")
         
-        # Form prevents rerun on every keystroke
         with st.form(key="profile_form"):
             col1, col2 = st.columns(2)
             
@@ -188,7 +199,7 @@ def render_home_page():
                 if not name:
                     st.error("Please enter your name")
                 else:
-                    st.session_state.profile = {
+                    profile = {
                         "name": name,
                         "cgpa": cgpa,
                         "degree": degree,
@@ -197,9 +208,11 @@ def render_home_page():
                         "interests": [i.strip() for i in interests.split(",") if i.strip()],
                         "created_at": datetime.now().isoformat()
                     }
+                    st.session_state.profile = profile  # FIX #8: Save to session properly
                     try:
-                        profiles_collection.insert_one(st.session_state.profile)
-                        st.session_state.profile_saved = True
+                        if profiles_collection is not None:
+                            profiles_collection.insert_one(profile)
+                            st.session_state.profile_saved = True
                     except:
                         pass
                     st.success("✅ Profile created successfully!")
@@ -283,20 +296,31 @@ def render_opportunities_page():
     st.markdown("## ⭐ AI-Powered Opportunity Rankings")
     st.markdown("---")
     
-    col_rank1, col_rank2 = st.columns([3, 1])
+    # FIX #9: Show opportunity count metric
+    col_rank1, col_rank2, col_rank3 = st.columns([2, 1, 1])
     with col_rank1:
         st.info("🤖 Let Gemini AI rank the best opportunities for you.")
     with col_rank2:
+        if opportunities:
+            st.metric("📊 Total Opportunities", len(opportunities))
+    with col_rank3:
         if st.button("🚀 Generate AI Rankings", use_container_width=True):
             with st.spinner("✨ Gemini AI is analyzing..."):
                 try:
                     ranking_text = rank_opportunities(st.session_state.profile, opportunities)
-                    st.write("RAW GEMINI OUTPUT:")
-                    st.code(ranking_text)
+                    # FIX #7: Show raw output for debugging (remove for final)
+                    with st.expander("🔍 Debug: Raw Gemini Output"):
+                        st.code(ranking_text)
+                    
                     rankings = parse_rankings(ranking_text)
-                    st.session_state.generated_rankings = rankings
-                    st.session_state.rankings_generated = True
-                    st.rerun()
+                    
+                    # FIX #6: Check if rankings were parsed successfully
+                    if not rankings:
+                        st.error("⚠️ Gemini returned no rankings. Please try again.")
+                    else:
+                        st.session_state.generated_rankings = rankings
+                        st.session_state.rankings_generated = True
+                        st.rerun()
                 except Exception as e:
                     st.error(f"Error: {e}")
     
@@ -323,39 +347,49 @@ def render_opportunities_page():
         
         st.markdown("---")
     
-    # Skill-based filtering
+    # FIX #3: Better skill matching logic
     user_skills = [s.lower() for s in st.session_state.profile.get("skills", [])]
-    matched_opps = [opp for opp in opportunities if any(skill.lower() in [s.lower() for s in opp.get('required_skills', [])] for skill in user_skills)]
+    matched_opps = []
     
+    for opp in opportunities:
+        required_skills = [s.lower() for s in opp.get("required_skills", [])]
+        
+        for skill in user_skills:
+            if any(skill in req or req in skill for req in required_skills):
+                matched_opps.append(opp)
+                break
+    
+    # FIX #4: Show all opportunities if no matches
     if not matched_opps:
-        st.info("🔍 No opportunities match your skills. Try adding more skills!")
-        return
+        st.warning("🔍 No exact skill matches found. Showing all available opportunities.")
+        matched_opps = opportunities
     
-    st.info(f"🎯 {len(matched_opps)} opportunities matched to your skills")
+    # FIX #9: Show matched count
+    st.info(f"🎯 Found {len(matched_opps)} opportunities relevant to your skills")
     
     filter_type = st.selectbox("📂 Filter by Type", ["All", "internship", "hackathon", "scholarship", "program"])
     if filter_type != "All":
         matched_opps = [opp for opp in matched_opps if opp.get('type') == filter_type]
     
-    for idx, opp in enumerate(matched_opps[:10]):
+    for opp in matched_opps[:10]:
         with st.expander(f"🎯 {opp.get('title', 'Untitled')}"):
-            st.caption(
-                f"📅 Deadline: {opp.get('deadline', 'No deadline')} | Type: {opp.get('type', 'Unknown')}"
-            )
+            st.caption(f"📅 Deadline: {opp.get('deadline', 'No deadline')} | Type: {opp.get('type', 'Unknown')}")
             st.write(opp.get('description', 'No description'))
+            
             col_a1, col_a2 = st.columns(2)
             with col_a1:
                 with st.expander("📋 Requirements"):
                     st.markdown(f"**CGPA:** {opp.get('min_cgpa', 'N/A')}")
                     st.markdown(f"**Skills:** {', '.join(opp.get('required_skills', []))}")
-            opp_id = f"{idx}_{opp.get('title', 'unknown')}"
+            
+            # FIX #5: Use unique key to prevent duplicate button errors
+            opp_id = opp.get('id', opp.get('_id', str(hash(opp.get('title', '')))))
+            unique_key = f"{opp_id}_{opp.get('title', 'unknown')}".replace(" ", "_")
+            
             if opp_id not in st.session_state.checked_opps:
-                if st.button("🔍 Analyze", key=f"check_{opp_id}"):
+                if st.button(f"🔍 Analyze", key=f"check_{unique_key}"):
                     with st.spinner("🤖 AI analyzing..."):
-                        ai_response = check_eligibility_with_ai(
-                            st.session_state.profile,
-                            opp
-                        )
+                        ai_response = check_eligibility_with_ai(st.session_state.profile, opp)
                         result = parse_ai_response(ai_response)
                         st.session_state.checked_opps[opp_id] = result
                         st.rerun()
@@ -388,13 +422,19 @@ def render_skill_analysis_page():
                          color_continuous_scale="purple")
             fig.update_layout(plot_bgcolor="#1E293B", paper_bgcolor="#1E293B", font_color="#F1F5F9")
             st.plotly_chart(fig, use_container_width=True)
+            
+            st.markdown("---")
+            st.markdown("### 📋 Learning Recommendations")
+            
+            for skill, count in skill_counts.most_common(5):
+                st.markdown(f"**📌 {skill.title()}** - Missing in {count} opportunities")
         else:
-            st.success("🎉 No skill gaps detected!")
+            st.success("🎉 No skill gaps detected! You have all required skills!")
             st.balloons()
     else:
-        st.info("👆 Analyze opportunities first to see skill gaps!")
+        st.info("👆 Go to Opportunities tab and analyze some opportunities first to see your skill gaps!")
 
-# ============ PAGE ROUTING (SMOOTH - NO EXTRA RERUNS) ============
+# ============ PAGE ROUTING ============
 if selected_page == "🏠 Home":
     render_home_page()
 elif selected_page == "📊 Dashboard":
