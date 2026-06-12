@@ -2,7 +2,7 @@ from google import genai
 import os
 import re
 from dotenv import load_dotenv
-
+import streamlit as st
 load_dotenv()
 
 client = genai.Client(
