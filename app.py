@@ -418,6 +418,10 @@ def render_opportunities_page():
                 st.progress(score / 100)
                 st.success("✅ ELIGIBLE" if result.get('eligible') == 'Yes' else "❌ NOT ELIGIBLE")
                 
+                # Show missing skills directly in the UI
+                if result.get('missing_skills'):
+                    st.warning(f"⚠️ **Missing Skills:** {', '.join(result['missing_skills'])}")
+                
                 # Add clear button with unique key too
                 clear_key = f"clear_{idx}_{opp_id}_{title_clean}"
                 if st.button(f"🗑️ Clear", key=clear_key, use_container_width=True):
@@ -433,30 +437,80 @@ def render_skill_analysis_page():
     st.markdown("---")
     
     if st.session_state.checked_opps:
-        all_missing = []
-        for result in st.session_state.checked_opps.values():
-            missing = result.get('missing_skills', [])
-            all_missing.extend([m.lower() for m in missing if m])
+        # Debug expander to see raw data
+        with st.expander("🔍 Debug: Checked Opportunities Data"):
+            for opp_id, result in st.session_state.checked_opps.items():
+                st.write(f"**Opportunity ID:** {opp_id}")
+                st.write(f"  - Eligible: {result.get('eligible')}")
+                st.write(f"  - Score: {result.get('score')}")
+                st.write(f"  - Missing Skills: {result.get('missing_skills', [])}")
+                st.write(f"  - Reason: {result.get('reason', '')[:100]}...")
+                st.write("---")
         
+        # Collect all missing skills from analyzed opportunities
+        all_missing = []
+        for opp_id, result in st.session_state.checked_opps.items():
+            missing = result.get('missing_skills', [])
+            if missing and isinstance(missing, list):
+                for skill in missing:
+                    if skill and skill.lower() != 'none':
+                        all_missing.append(skill.lower().strip())
+        
+        # Display results
         if all_missing:
+            st.success(f"✅ Found {len(all_missing)} skill gaps across your analyzed opportunities!")
+            
+            # Count frequency of each missing skill
             skill_counts = Counter(all_missing)
-            fig = px.bar(x=list(skill_counts.keys()), y=list(skill_counts.values()), 
-                         title="Skills You Need to Learn",
-                         color=list(skill_counts.values()),
-                         color_continuous_scale="purple")
-            fig.update_layout(plot_bgcolor="#1E293B", paper_bgcolor="#1E293B", font_color="#F1F5F9")
+            
+            # Create bar chart
+            fig = px.bar(
+                x=list(skill_counts.keys()), 
+                y=list(skill_counts.values()), 
+                title="Skills You Need to Learn",
+                color=list(skill_counts.values()),
+                color_continuous_scale="purple"
+            )
+            fig.update_layout(
+                plot_bgcolor="#1E293B", 
+                paper_bgcolor="#1E293B", 
+                font_color="#F1F5F9",
+                xaxis_title="Skills",
+                yaxis_title="Times Missing"
+            )
             st.plotly_chart(fig, use_container_width=True)
             
             st.markdown("---")
             st.markdown("### 📋 Learning Recommendations")
             
             for skill, count in skill_counts.most_common(5):
-                st.markdown(f"**📌 {skill.title()}** - Missing in {count} opportunities")
+                st.markdown(f"""
+                <div style="background-color: #1E293B; padding: 15px; border-radius: 10px; margin: 10px 0; border-left: 4px solid #8B5CF6;">
+                    <h4>📌 {skill.title()}</h4>
+                    <p>Missing in <strong>{count}</strong> opportunity/ies</p>
+                    <p>💡 <strong>Recommendation:</strong> Focus on learning {skill.title()} through online courses and practice projects.</p>
+                </div>
+                """, unsafe_allow_html=True)
         else:
-            st.success("🎉 No skill gaps detected! You have all required skills!")
-            st.balloons()
+            st.warning("⚠️ No skill gaps detected in the analyzed opportunities.")
+            st.info("""
+            **This could mean:**
+            1. You haven't analyzed enough opportunities yet (analyze more!)
+            2. Your profile skills perfectly match all requirements (unlikely)
+            3. Gemini isn't returning missing_skills data - check the debug panel above
+            
+            **Try:** Go to Opportunities tab and analyze 2-3 opportunities first.
+            """)
     else:
-        st.info("👆 Go to Opportunities tab and analyze some opportunities first to see your skill gaps!")
+        st.info("👆 **No opportunities analyzed yet!**")
+        st.markdown("""
+        ### How to see skill gaps:
+        1. Go to the **Opportunities** tab
+        2. Click **"Analyze"** on any opportunity
+        3. Return here to see your skill gaps
+        
+        The AI will identify which skills you're missing for each opportunity.
+        """)
 
 # ============ PAGE ROUTING ============
 if selected_page == "🏠 Home":
