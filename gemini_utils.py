@@ -3,34 +3,46 @@ import os
 import re
 import streamlit as st
 
-# ============ FIXED: API Key Loading ============
-# Try multiple ways to get the API key
+# ============ FIXED: API Key Loading - Works with AQ and AIza ============
 GEMINI_API_KEY = None
 
-# Method 1: Try Streamlit secrets
+# Method 1: Try Streamlit secrets (Cloud)
 try:
     if hasattr(st, 'secrets') and st.secrets:
+        # Check multiple possible secret names
         GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY")
+        if not GEMINI_API_KEY:
+            GEMINI_API_KEY = st.secrets.get("GOOGLE_API_KEY")
+        if not GEMINI_API_KEY:
+            GEMINI_API_KEY = st.secrets.get("API_KEY")
         if GEMINI_API_KEY:
-            print("✅ API Key loaded from Streamlit secrets")
+            print(f"✅ API Key loaded from Streamlit secrets (starts with: {GEMINI_API_KEY[:2]}...)")
 except Exception as e:
     print(f"Error loading from secrets: {e}")
 
-# Method 2: Try environment variable
+# Method 2: Try environment variable (Local)
 if not GEMINI_API_KEY:
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+    if not GEMINI_API_KEY:
+        GEMINI_API_KEY = os.getenv("GOOGLE_API_KEY")
+    if not GEMINI_API_KEY:
+        GEMINI_API_KEY = os.getenv("API_KEY")
     if GEMINI_API_KEY:
-        print("✅ API Key loaded from environment variable")
+        print(f"✅ API Key loaded from environment variable (starts with: {GEMINI_API_KEY[:2]}...)")
 
-# Method 3: Hardcoded fallback (ONLY FOR TESTING - remove later)
+# Method 3: Try direct hardcoded for testing (REMOVE FOR PRODUCTION)
 if not GEMINI_API_KEY:
-    # DON'T hardcode your key here in production!
-    # This is just to test if API works
+    # Don't hardcode here - this is just for debugging
     print("❌ No API key found in secrets or environment")
 
 # Initialize Gemini Client
 if GEMINI_API_KEY:
-    client = genai.Client(api_key=GEMINI_API_KEY)
+    try:
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        print("✅ Gemini client initialized successfully")
+    except Exception as e:
+        client = None
+        print(f"❌ Failed to initialize Gemini client: {e}")
 else:
     client = None
     print("❌ Gemini client not initialized - missing API key")
@@ -44,7 +56,7 @@ ELIGIBILITY_SCORE: 0
 ELIGIBLE: No
 
 REASON:
-Gemini API client not initialized. API key is missing.
+Gemini API client not initialized. API key is missing or invalid.
 
 STRENGTHS:
 None
@@ -53,13 +65,12 @@ MISSING_SKILLS:
 None
 
 RECOMMENDATION:
-Please add GEMINI_API_KEY to Streamlit Cloud secrets.
+Please check your API key configuration.
 
 NEXT_STEPS:
-1. Go to share.streamlit.io
-2. Click 'Manage app' → 'Settings' → 'Secrets'
-3. Add: GEMINI_API_KEY = 'your_key_here'
-4. Redeploy the app
+1. Verify API key is correct in secrets.toml or .env
+2. Make sure the key has Gemini API enabled
+3. Check your internet connection
 """
 
     prompt = f"""
@@ -155,12 +166,12 @@ MISSING_SKILLS:
 None
 
 RECOMMENDATION:
-Check your Gemini API key and billing status.
+Check your API configuration. Error: {error_msg[:100]}
 
 NEXT_STEPS:
 1. Verify API key is correct
-2. Enable billing at https://console.cloud.google.com/
-3. Check API quotas at https://ai.google.dev/
+2. Check API quotas at https://ai.google.dev/
+3. Try again in a few minutes
 """
 
 
