@@ -498,12 +498,13 @@ def render_skill_analysis_page():
             st.success(f"✅ Found {len(all_missing)} skill gaps!")
             skill_counts = Counter(all_missing)
             
+            # FIXED: Changed 'purple' to 'Viridis' which is a valid Plotly color scale
             fig = px.bar(
                 x=list(skill_counts.keys()), 
                 y=list(skill_counts.values()), 
                 title="Skills You Need to Learn",
                 color=list(skill_counts.values()),
-                color_continuous_scale="purple"
+                color_continuous_scale="Viridis"
             )
             fig.update_layout(
                 plot_bgcolor="#1E293B", 
